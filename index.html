@@ -17,24 +17,30 @@
     h1{margin:0;font-size:18px}
     .sub{margin:4px 0 0;color:var(--muted);font-size:13px}
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
     button{border:1px solid var(--btn);background:var(--btn);color:#fff;padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
     button.secondary{background:#fff;color:var(--btn);border:1px solid var(--line2)}
     button:disabled{opacity:.5;cursor:not-allowed}
+
     .pill{border:1px solid var(--line2);background:#fff;color:var(--muted);padding:7px 10px;border-radius:999px;font-size:12px;line-height:1}
     .pill.ok{color:var(--ok);border-color:rgba(22,163,74,.35)}
     .pill.bad{color:var(--bad);border-color:rgba(220,38,38,.35)}
+
     main{padding-top:14px}
     .grid{display:grid;grid-template-columns:1fr 1.7fr;gap:14px;align-items:start}
     @media (max-width:980px){.grid{grid-template-columns:1fr}}
     .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
     .card h2{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:800;letter-spacing:.35px}
+
     .kpis{display:grid;gap:10px}
     .kpi{border:1px solid var(--line);border-radius:12px;padding:12px}
     .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
     .kpi .value{font-size:30px;font-weight:900}
     .kpi .unit{font-size:13px;color:var(--muted);font-weight:700}
+
     .chartBox{border:1px solid var(--line);border-radius:12px;padding:10px;height:380px;position:relative;background:#fff}
     canvas{width:100% !important;height:100% !important;}
+
     details{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
     summary{cursor:pointer;color:var(--muted);font-size:12px}
     pre{
@@ -44,6 +50,48 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
     .note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35}
+
+    /* panel skali */
+    .scale{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px;
+      margin-bottom:10px;
+      background:#fff;
+    }
+    @media (max-width:980px){ .scale{grid-template-columns:1fr} }
+
+    .scaleGroup{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px;
+    }
+    .scaleTitle{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:800;
+      letter-spacing:.3px;
+      margin:0 0 8px;
+    }
+    .fields{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:8px;
+      align-items:end;
+    }
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+    input[type="number"]{
+      width:100%;
+      padding:8px 10px;
+      border:1px solid var(--line2);
+      border-radius:10px;
+      font-size:13px;
+      outline:none;
+    }
+    .scaleBtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   </style>
 </head>
 <body>
@@ -51,7 +99,7 @@
   <header>
     <div>
       <h1>NanoDHT • Monitor</h1>
-      <p class="sub">BLE • format: T,H,S,SEQ (CSV) • T lewa oś • H prawa oś • eksport CSV</p>
+      <p class="sub">BLE • format: T,H,S,SEQ • wykres: T lewa oś, H prawa oś • ręczna skala Y</p>
     </div>
     <div class="controls">
       <button id="btnConnect">Połącz BLE</button>
@@ -89,16 +137,54 @@
         </details>
 
         <div class="note">
-          Jeżeli po połączeniu nic nie przychodzi: kliknij „Pobierz próbkę” (wysyła komendę 'S' do Arduino).
+          Skala wykresu ustawiana jest ręcznie w panelu po prawej. „Auto” wraca do automatycznego dopasowania.
         </div>
       </section>
 
       <section class="card">
-        <h2>WYKRES (ostatnie 60 próbek)</h2>
+        <h2>WYKRES</h2>
+
+        <!-- PANEL SKALI -->
+        <div class="scale">
+          <div class="scaleGroup">
+            <div class="scaleTitle">Oś Y (T) — lewa</div>
+            <div class="fields">
+              <div>
+                <label for="tMin">Min [°C]</label>
+                <input id="tMin" type="number" step="0.1" placeholder="auto">
+              </div>
+              <div>
+                <label for="tMax">Max [°C]</label>
+                <input id="tMax" type="number" step="0.1" placeholder="auto">
+              </div>
+            </div>
+          </div>
+
+          <div class="scaleGroup">
+            <div class="scaleTitle">Oś Y (H) — prawa</div>
+            <div class="fields">
+              <div>
+                <label for="hMin">Min [%]</label>
+                <input id="hMin" type="number" step="1" placeholder="auto">
+              </div>
+              <div>
+                <label for="hMax">Max [%]</label>
+                <input id="hMax" type="number" step="1" placeholder="auto">
+              </div>
+            </div>
+          </div>
+
+          <div class="scaleBtns" style="grid-column:1 / -1">
+            <button id="btnApplyScale" class="secondary">Zastosuj skalę</button>
+            <button id="btnAutoScale" class="secondary">Auto</button>
+          </div>
+        </div>
+
         <div class="chartBox">
           <canvas id="chart"></canvas>
         </div>
-        <div class="note">Oś lewa: T [°C]. Oś prawa: H [%].</div>
+
+        <div class="note">Okno wykresu: ostatnie 60 próbek.</div>
       </section>
     </div>
   </main>
@@ -127,12 +213,20 @@
   const hEl = $("h");
   const logEl = $("log");
 
+  // skala inputs
+  const tMinEl = $("tMin");
+  const tMaxEl = $("tMax");
+  const hMinEl = $("hMin");
+  const hMaxEl = $("hMax");
+  const btnApplyScale = $("btnApplyScale");
+  const btnAutoScale = $("btnAutoScale");
+
   let device=null, server=null, service=null, dataChar=null, cmdChar=null;
   const decoder = new TextDecoder("utf-8");
 
   const MAX = 60;
   const labels=[], tData=[], hData=[];
-  const allSamples=[]; // {iso, ts, sensor, t, h, seq, raw}
+  const allSamples=[];
 
   function log(s){
     const ts = new Date().toLocaleTimeString();
@@ -177,8 +271,20 @@
       plugins:{legend:{display:false}},
       scales:{
         x:{grid:{color:"#f1f5f9"}, ticks:{maxTicksLimit:8, color:"#475569"}},
-        yT:{position:"left", grid:{color:"#f1f5f9"}, ticks:{color:"#475569"}, title:{display:true,text:"T [°C]",color:"#475569"}},
-        yH:{position:"right", grid:{drawOnChartArea:false}, ticks:{color:"#475569"}, title:{display:true,text:"H [%]",color:"#475569"}, min:0, max:100}
+        yT:{
+          position:"left",
+          grid:{color:"#f1f5f9"},
+          ticks:{color:"#475569"},
+          title:{display:true,text:"T [°C]",color:"#475569"}
+          // min/max ustawimy dynamicznie
+        },
+        yH:{
+          position:"right",
+          grid:{drawOnChartArea:false},
+          ticks:{color:"#475569"},
+          title:{display:true,text:"H [%]",color:"#475569"}
+          // min/max ustawimy dynamicznie
+        }
       }
     }
   });
@@ -190,11 +296,7 @@
     hData.push(h);
     while(labels.length>MAX){ labels.shift(); tData.shift(); hData.shift(); }
 
-    allSamples.push({
-      iso: now.toISOString(),
-      ts: now.getTime(),
-      sensor, t, h, seq, raw
-    });
+    allSamples.push({ iso: now.toISOString(), ts: now.getTime(), sensor, t, h, seq, raw });
 
     setCount();
     chart.update("none");
@@ -202,8 +304,6 @@
 
   function handleLine(line){
     log(line);
-
-    // format: T,H,S,SEQ
     const parts = line.trim().split(",");
     if(parts.length < 4) return;
 
@@ -237,7 +337,6 @@
       alert("Web Bluetooth niedostępny. Użyj Chrome/Edge.");
       return;
     }
-
     setStatus("łączenie...");
     log("Klik: Połącz BLE");
 
@@ -263,13 +362,12 @@
     cmdChar  = await service.getCharacteristic(CMD_UUID);
 
     await dataChar.startNotifications();
-
     dataChar.addEventListener("characteristicvaluechanged", (e)=>{
       const raw = decoder.decode(e.target.value);
       handleLine(raw);
     });
 
-    // Fallback: co 2.5s zrób readValue (gdyby notify nie przyszło)
+    // fallback read
     setInterval(async ()=>{
       if(!dataChar) return;
       try{
@@ -313,6 +411,64 @@
     URL.revokeObjectURL(url);
   }
 
+  // ====== SKALA Y (min/max) ======
+  function parseOrNull(el){
+    const v = el.value.trim();
+    if(v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function applyScale(){
+    const tMin = parseOrNull(tMinEl);
+    const tMax = parseOrNull(tMaxEl);
+    const hMin = parseOrNull(hMinEl);
+    const hMax = parseOrNull(hMaxEl);
+
+    // T
+    if(tMin !== null) chart.options.scales.yT.min = tMin;
+    else delete chart.options.scales.yT.min;
+
+    if(tMax !== null) chart.options.scales.yT.max = tMax;
+    else delete chart.options.scales.yT.max;
+
+    // H
+    if(hMin !== null) chart.options.scales.yH.min = hMin;
+    else delete chart.options.scales.yH.min;
+
+    if(hMax !== null) chart.options.scales.yH.max = hMax;
+    else delete chart.options.scales.yH.max;
+
+    chart.update("none");
+    log(`Skala zastosowana: T[min=${tMin ?? "auto"}, max=${tMax ?? "auto"}], H[min=${hMin ?? "auto"}, max=${hMax ?? "auto"}]`);
+  }
+
+  function autoScale(){
+    tMinEl.value = "";
+    tMaxEl.value = "";
+    hMinEl.value = "";
+    hMaxEl.value = "";
+
+    delete chart.options.scales.yT.min;
+    delete chart.options.scales.yT.max;
+    delete chart.options.scales.yH.min;
+    delete chart.options.scales.yH.max;
+
+    chart.update("none");
+    log("Skala: AUTO");
+  }
+
+  btnApplyScale.addEventListener("click", applyScale);
+  btnAutoScale.addEventListener("click", autoScale);
+
+  // Enter w polach -> zastosuj
+  [tMinEl,tMaxEl,hMinEl,hMaxEl].forEach(el=>{
+    el.addEventListener("keydown",(e)=>{
+      if(e.key==="Enter") applyScale();
+    });
+  });
+
+  // ====== UI ======
   btnConnect.addEventListener("click", ()=>connectBLE().catch(err=>{
     setStatus("błąd połączenia","bad");
     log("ERROR: "+err);
