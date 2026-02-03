@@ -6,65 +6,37 @@
   <title>NanoDHT • Monitor</title>
   <style>
     :root{
-      --bg:#ffffff;
-      --text:#0f172a;
-      --muted:#475569;
-      --line:#e5e7eb;
-      --line2:#cbd5e1;
-      --ok:#16a34a;
-      --bad:#dc2626;
-      --btn:#0f172a;
+      --bg:#ffffff; --text:#0f172a; --muted:#475569;
+      --line:#e5e7eb; --line2:#cbd5e1;
+      --ok:#16a34a; --bad:#dc2626; --btn:#0f172a;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
     .wrap{max-width:1120px;margin:0 auto;padding:22px}
     header{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--line)}
-    h1{margin:0;font-size:18px;letter-spacing:.2px}
+    h1{margin:0;font-size:18px}
     .sub{margin:4px 0 0;color:var(--muted);font-size:13px}
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 
-    button{
-      border:1px solid var(--btn);
-      background:var(--btn);
-      color:#fff;
-      padding:9px 12px;
-      border-radius:10px;
-      font-weight:700;
-      cursor:pointer;
-    }
-    button.secondary{
-      background:#fff;
-      color:var(--btn);
-      border:1px solid var(--line2);
-    }
+    button{border:1px solid var(--btn);background:var(--btn);color:#fff;padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+    button.secondary{background:#fff;color:var(--btn);border:1px solid var(--line2)}
     button:disabled{opacity:.5;cursor:not-allowed}
 
-    .pill{
-      border:1px solid var(--line2);
-      background:#fff;
-      color:var(--muted);
-      padding:7px 10px;
-      border-radius:999px;
-      font-size:12px;
-      line-height:1;
-    }
+    .pill{border:1px solid var(--line2);background:#fff;color:var(--muted);padding:7px 10px;border-radius:999px;font-size:12px;line-height:1}
     .pill.ok{color:var(--ok);border-color:rgba(22,163,74,.35)}
     .pill.bad{color:var(--bad);border-color:rgba(220,38,38,.35)}
 
     main{padding-top:14px}
-    .grid{display:grid;grid-template-columns: 1fr 1.7fr;gap:14px;align-items:start}
-    @media (max-width: 980px){.grid{grid-template-columns:1fr}}
-
+    .grid{display:grid;grid-template-columns:1fr 1.7fr;gap:14px;align-items:start}
+    @media (max-width:980px){.grid{grid-template-columns:1fr}}
     .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
     .card h2{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:800;letter-spacing:.35px}
 
     .kpis{display:grid;gap:10px}
     .kpi{border:1px solid var(--line);border-radius:12px;padding:12px}
     .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
-    .kpi .value{font-size:30px;font-weight:900;letter-spacing:.2px}
+    .kpi .value{font-size:30px;font-weight:900}
     .kpi .unit{font-size:13px;color:var(--muted);font-weight:700}
-
-    .note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35}
 
     details{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
     summary{cursor:pointer;color:var(--muted);font-size:12px}
@@ -75,400 +47,306 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
 
-    .chartTop{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-    .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:12px}
-    .sw{display:inline-block;width:18px;height:3px;border-radius:3px;vertical-align:middle}
-    .sw.t{background:#0f172a}
-    .sw.h{background:#64748b}
-
-    .chartBox{
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:10px;
-      height:380px;           /* KLUCZ: stała wysokość dla Chart.js */
-      position:relative;
-      background:#fff;
-    }
-    canvas{width:100% !important; height:100% !important;}
+    .chartBox{border:1px solid var(--line);border-radius:12px;padding:10px;height:380px;position:relative;background:#fff}
+    canvas{width:100% !important;height:100% !important;}
+    .note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>NanoDHT • Monitor</h1>
-        <p class="sub">BLE (Web Bluetooth) • Wykres 2-osiowy (T lewa, H prawa) • CSV</p>
-      </div>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>NanoDHT • Monitor</h1>
+      <p class="sub">BLE • T lewa oś • H prawa oś • CSV • parsowanie linij po “\\n”</p>
+    </div>
+    <div class="controls">
+      <button id="btnConnect">Połącz BLE</button>
+      <button id="btnDisconnect" class="secondary" disabled>Rozłącz</button>
+      <button id="btnExport" class="secondary" disabled>Eksport CSV</button>
+      <button id="btnClear" class="secondary" disabled>Wyczyść dane</button>
 
-      <div class="controls">
-        <button id="btnConnect">Połącz BLE</button>
-        <button id="btnDisconnect" class="secondary" disabled>Rozłącz</button>
-        <button id="btnExport" class="secondary" disabled>Eksport CSV</button>
-        <button id="btnClear" class="secondary" disabled>Wyczyść dane</button>
-        <button id="btnTest" class="secondary">Test wykresu</button>
+      <span id="status" class="pill">rozłączony</span>
+      <span id="sensor" class="pill">czujnik: --</span>
+      <span id="last" class="pill">ostatni: --</span>
+      <span id="count" class="pill">próbki: 0</span>
+    </div>
+  </header>
 
-        <span id="status" class="pill">rozłączony</span>
-        <span id="sensor" class="pill">czujnik: --</span>
-        <span id="last" class="pill">ostatni: --</span>
-        <span id="count" class="pill">próbki: 0</span>
-      </div>
-    </header>
-
-    <main>
-      <div class="grid">
-        <section class="card">
-          <h2>ODCZYTY</h2>
-          <div class="kpis">
-            <div class="kpi">
-              <div class="label">Temperatura</div>
-              <div class="value"><span id="t">--</span> <span class="unit">°C</span></div>
-            </div>
-            <div class="kpi">
-              <div class="label">Wilgotność</div>
-              <div class="value"><span id="h">--</span> <span class="unit">%</span></div>
-            </div>
+  <main>
+    <div class="grid">
+      <section class="card">
+        <h2>ODCZYTY</h2>
+        <div class="kpis">
+          <div class="kpi">
+            <div class="label">Temperatura</div>
+            <div class="value"><span id="t">--</span> <span class="unit">°C</span></div>
           </div>
-
-          <div class="note">
-            Jeśli wilgotność „stoi”: DHT11 zmienia się skokowo (często co 1%). Zrób test: oddech / wilgotna chusteczka obok sensora.
+          <div class="kpi">
+            <div class="label">Wilgotność</div>
+            <div class="value"><span id="h">--</span> <span class="unit">%</span></div>
           </div>
+        </div>
 
-          <details open>
-            <summary>Log (debug)</summary>
-            <pre id="log"></pre>
-          </details>
-        </section>
+        <details open>
+          <summary>Log (debug)</summary>
+          <pre id="log"></pre>
+        </details>
 
-        <section class="card">
-          <div class="chartTop">
-            <h2 style="margin:0">WYKRES (ostatnie 60 próbek)</h2>
-            <div class="legend">
-              <span><span class="sw t"></span> T [°C] (lewa oś)</span>
-              <span><span class="sw h"></span> H [%] (prawa oś)</span>
-            </div>
-          </div>
+        <div class="note">
+          Jeśli widzisz logi, a wykres był pusty wcześniej: winny był ucięty JSON. Teraz składamy bufor i parsujemy dopiero pełne linie.
+        </div>
+      </section>
 
-          <div class="chartBox" style="margin-top:10px">
-            <canvas id="chart"></canvas>
-          </div>
+      <section class="card">
+        <h2>WYKRES (ostatnie 60 próbek)</h2>
+        <div class="chartBox">
+          <canvas id="chart"></canvas>
+        </div>
+        <div class="note">
+          Oś lewa: T [°C]. Oś prawa: H [%].
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
 
-          <div class="note">
-            Jeśli wykres nadal byłby pusty: kliknij „Test wykresu”. Jeśli test rysuje, to problem jest w parsowaniu JSON (ale logi lecą).
-          </div>
-        </section>
-      </div>
-    </main>
-  </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
+  const CHAR_UUID    = "12345678-1234-1234-1234-1234567890ac";
 
-  <!-- Chart.js z CDN (najbardziej niezawodne podejście) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  const $ = (id) => document.getElementById(id);
 
-  <script>
-    // UUID muszą pasować do Arduino
-    const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
-    const CHAR_UUID    = "12345678-1234-1234-1234-1234567890ac";
+  const btnConnect = $("btnConnect");
+  const btnDisconnect = $("btnDisconnect");
+  const btnExport = $("btnExport");
+  const btnClear = $("btnClear");
 
-    const $ = (id) => document.getElementById(id);
+  const statusEl = $("status");
+  const sensorEl = $("sensor");
+  const lastEl = $("last");
+  const countEl = $("count");
+  const tEl = $("t");
+  const hEl = $("h");
+  const logEl = $("log");
 
-    const btnConnect = $("btnConnect");
-    const btnDisconnect = $("btnDisconnect");
-    const btnExport = $("btnExport");
-    const btnClear = $("btnClear");
-    const btnTest = $("btnTest");
+  let device = null;
+  let characteristic = null;
 
-    const statusEl = $("status");
-    const sensorEl = $("sensor");
-    const lastEl = $("last");
-    const countEl = $("count");
-    const tEl = $("t");
-    const hEl = $("h");
-    const logEl = $("log");
+  const decoder = new TextDecoder("utf-8");
+  let rxBuffer = "";   // <<< KLUCZ: bufor na pofragmentowane BLE notyfikacje
 
-    let device = null;
-    let characteristic = null;
-    const decoder = new TextDecoder("utf-8");
+  const MAX = 60;
+  const labels = [];
+  const tData = [];
+  const hData = [];
+  const allSamples = []; // {iso, ts, s, t, h, raw}
 
-    const MAX = 60;
-    const windowLabels = [];   // np. "12:03:11"
-    const tempData = [];       // T
-    const humData  = [];       // H
-    const allSamples = [];     // do CSV: {ts, t, h, s, raw}
+  function log(s){
+    const ts = new Date().toLocaleTimeString();
+    logEl.textContent += `[${ts}] ${s}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
 
-    function log(s){
-      const ts = new Date().toLocaleTimeString();
-      logEl.textContent += `[${ts}] ${s}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
-    }
+  function setStatus(text, kind=""){
+    statusEl.textContent = text;
+    statusEl.classList.remove("ok","bad");
+    if(kind) statusEl.classList.add(kind);
+  }
 
-    function setStatus(text, kind=""){
-      statusEl.textContent = text;
-      statusEl.classList.remove("ok","bad");
-      if(kind) statusEl.classList.add(kind);
-    }
+  function setSensor(sensorId, ok){
+    let label = "czujnik: --";
+    if(sensorId === 11) label = "czujnik: DHT11";
+    else if(sensorId === 22) label = "czujnik: DHT22";
+    sensorEl.textContent = label;
 
-    function setSensor(sensorId, ok){
-      let label = "czujnik: --";
-      if(sensorId === 11) label = "czujnik: DHT11";
-      else if(sensorId === 22) label = "czujnik: DHT22";
-      sensorEl.textContent = label;
+    sensorEl.classList.remove("ok","bad");
+    if(ok === true) sensorEl.classList.add("ok");
+    if(ok === false) sensorEl.classList.add("bad");
+  }
 
-      sensorEl.classList.remove("ok","bad");
-      if(ok === true) sensorEl.classList.add("ok");
-      if(ok === false) sensorEl.classList.add("bad");
-    }
+  function setLast(date){
+    lastEl.textContent = "ostatni: " + (date ? date.toLocaleTimeString() : "--");
+  }
 
-    function setLast(date){
-      lastEl.textContent = "ostatni: " + (date ? date.toLocaleTimeString() : "--");
-    }
+  function setCount(){
+    countEl.textContent = "próbki: " + allSamples.length;
+    const has = allSamples.length > 0;
+    btnExport.disabled = !has;
+    btnClear.disabled = !has;
+  }
 
-    function setCount(){
-      countEl.textContent = "próbki: " + allSamples.length;
-      const has = allSamples.length > 0;
-      btnExport.disabled = !has;
-      btnClear.disabled = !has;
-    }
-
-    // ===== CHART.JS =====
-    const ctx = $("chart").getContext("2d");
-
-    if (!window.Chart) {
-      // jeśli CDN nie wczyta się (np. blokada), to od razu widzisz przyczynę
-      log("ERROR: Chart.js nie został załadowany (CDN). Sprawdź internet / blokady.");
-    }
-
-    const chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: windowLabels,
-        datasets: [
-          {
-            label: "T [°C]",
-            data: tempData,
-            borderColor: "#0f172a",
-            backgroundColor: "transparent",
-            tension: 0.2,
-            pointRadius: 2,
-            yAxisID: "yT"
-          },
-          {
-            label: "H [%]",
-            data: humData,
-            borderColor: "#64748b",
-            backgroundColor: "transparent",
-            tension: 0.2,
-            pointRadius: 2,
-            yAxisID: "yH"
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              afterBody: (items) => {
-                // pokaż skale osi w tooltipie (prosto/inżyniersko)
-                return "";
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: "#f1f5f9" },
-            ticks: { maxTicksLimit: 8, color: "#475569" }
-          },
-          yT: {
-            position: "left",
-            grid: { color: "#f1f5f9" },
-            ticks: { color: "#475569" },
-            title: { display: true, text: "T [°C]", color: "#475569" }
-          },
-          yH: {
-            position: "right",
-            grid: { drawOnChartArea: false }, // żeby nie dublować siatki
-            ticks: { color: "#475569" },
-            title: { display: true, text: "H [%]", color: "#475569" },
-            min: 0,
-            max: 100
-          }
-        }
+  const ctx = $("chart").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label:"T [°C]", data:tData, yAxisID:"yT", borderColor:"#0f172a", backgroundColor:"transparent", tension:0.2, pointRadius:2 },
+        { label:"H [%]", data:hData, yAxisID:"yH", borderColor:"#64748b", backgroundColor:"transparent", tension:0.2, pointRadius:2 }
+      ]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      animation:false,
+      interaction:{mode:"index", intersect:false},
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ grid:{color:"#f1f5f9"}, ticks:{maxTicksLimit:8, color:"#475569"} },
+        yT:{ position:"left", grid:{color:"#f1f5f9"}, ticks:{color:"#475569"}, title:{display:true,text:"T [°C]",color:"#475569"} },
+        yH:{ position:"right", grid:{drawOnChartArea:false}, ticks:{color:"#475569"}, title:{display:true,text:"H [%]",color:"#475569"}, min:0, max:100 }
       }
+    }
+  });
+
+  function pushPoint(t, h, s, raw){
+    const now = new Date();
+    labels.push(now.toLocaleTimeString());
+    tData.push(t);
+    hData.push(h);
+
+    while(labels.length > MAX){ labels.shift(); tData.shift(); hData.shift(); }
+
+    allSamples.push({ iso: now.toISOString(), ts: now.getTime(), s, t, h, raw });
+
+    setCount();
+    chart.update("none");
+  }
+
+  function exportCSV(){
+    if(allSamples.length === 0) return;
+
+    const lines = [];
+    lines.push("timestamp_iso,epoch_ms,sensor,temperature_c,humidity_pct,raw");
+
+    for(const p of allSamples){
+      const sName = (p.s === 22) ? "DHT22" : (p.s === 11) ? "DHT11" : "";
+      const t = Number.isFinite(p.t) ? p.t.toFixed(1) : "";
+      const h = Number.isFinite(p.h) ? Math.round(p.h).toString() : "";
+      const raw = (p.raw ?? "").replaceAll('"','""');
+      lines.push(`${p.iso},${p.ts},${sName},${t},${h},"${raw}"`);
+    }
+
+    const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().replaceAll(":","-").slice(0,19);
+    a.href = url;
+    a.download = `nano_dht_${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function connectBLE(){
+    if(!navigator.bluetooth){
+      alert("Web Bluetooth niedostępny. Użyj Chrome/Edge.");
+      return;
+    }
+
+    setStatus("łączenie...");
+    log("Klik: Połącz BLE");
+
+    // <<< KLUCZ: nie acceptAllDevices — filtrujemy po serwisie (i nazwie)
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{
+        services: [SERVICE_UUID],
+        namePrefix: "NanoDHT"
+      }],
+      optionalServices: [SERVICE_UUID]
     });
 
-    function pushPoint(t, h, sensorId, raw){
-      const now = new Date();
-      const label = now.toLocaleTimeString();
+    device.addEventListener("gattserverdisconnected", () => {
+      setStatus("rozłączony", "bad");
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
+      characteristic = null;
+      log("Rozłączono (BLE).");
+    });
 
-      // okno wykresu
-      windowLabels.push(label);
-      tempData.push(t);
-      humData.push(h);
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    characteristic = await service.getCharacteristic(CHAR_UUID);
 
-      while (windowLabels.length > MAX) {
-        windowLabels.shift();
-        tempData.shift();
-        humData.shift();
-      }
+    rxBuffer = ""; // reset bufora
 
-      // pełna historia do CSV
-      allSamples.push({
-        ts: now.getTime(),
-        iso: now.toISOString(),
-        s: sensorId,
-        t, h,
-        raw
-      });
+    await characteristic.startNotifications();
+    characteristic.addEventListener("characteristicvaluechanged", (e) => {
+      const chunk = decoder.decode(e.target.value);
+      // loguj też chunk, ale wolisz log całych linii? Tu logujemy linie po złożeniu.
+      rxBuffer += chunk;
 
-      setCount();
-      chart.update("none");
-    }
+      // Parsujemy tylko pełne linie zakończone '\n'
+      let idx;
+      while ((idx = rxBuffer.indexOf("\n")) >= 0) {
+        const line = rxBuffer.slice(0, idx).trim();
+        rxBuffer = rxBuffer.slice(idx + 1);
 
-    function exportCSV(){
-      if(allSamples.length === 0) return;
+        if(!line) continue;
+        log(line);
 
-      const lines = [];
-      lines.push("timestamp_iso,epoch_ms,sensor,temperature_c,humidity_pct,raw");
-
-      for(const p of allSamples){
-        const s = (p.s === 22) ? "DHT22" : (p.s === 11) ? "DHT11" : "";
-        const t = Number.isFinite(p.t) ? p.t.toFixed(1) : "";
-        const h = Number.isFinite(p.h) ? Math.round(p.h).toString() : "";
-        const raw = (p.raw ?? "").replaceAll('"','""');
-        lines.push(`${p.iso},${p.ts},${s},${t},${h},"${raw}"`);
-      }
-
-      const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      const stamp = new Date().toISOString().replaceAll(":","-").slice(0,19);
-      a.href = url;
-      a.download = `nano_dht_${stamp}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
-
-    // ===== BLE =====
-    async function connectBLE(){
-      if(!navigator.bluetooth){
-        alert("Web Bluetooth niedostępny. Użyj Chrome/Edge.");
-        return;
-      }
-
-      setStatus("łączenie...");
-      log("Klik: Połącz BLE");
-
-      // Najbardziej odporne: pokazuje listę urządzeń, Ty wybierasz NanoDHT
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [SERVICE_UUID]
-      });
-
-      device.addEventListener("gattserverdisconnected", () => {
-        setStatus("rozłączony", "bad");
-        btnConnect.disabled = false;
-        btnDisconnect.disabled = true;
-        characteristic = null;
-        log("Rozłączono (BLE).");
-      });
-
-      const server = await device.gatt.connect();
-      const service = await server.getPrimaryService(SERVICE_UUID);
-      characteristic = await service.getCharacteristic(CHAR_UUID);
-
-      await characteristic.startNotifications();
-      characteristic.addEventListener("characteristicvaluechanged", (e) => {
-        const raw = decoder.decode(e.target.value);
-        log(raw);
-
-        // Parser odporny: przyjmie liczby i stringi
         try{
-          const obj = JSON.parse(raw);
-
+          const obj = JSON.parse(line);
           const t = Number(obj.t);
           const h = Number(obj.h);
+          const s = (obj.s === 11 || obj.s === 22) ? obj.s : Number(obj.s);
 
-          const s = (obj.s === 11 || obj.s === 22) ? obj.s : (Number(obj.s) === 11 ? 11 : Number(obj.s) === 22 ? 22 : null);
-
-          const ok = (t !== -1 && h !== -1 && Number.isFinite(t) && Number.isFinite(h) && h >= 0 && h <= 100);
-          setSensor(s, ok);
+          const ok = (t !== -1 && h !== -1 && Number.isFinite(t) && Number.isFinite(h) && h>=0 && h<=100);
+          setSensor((s===11||s===22)?s:null, ok);
 
           if(ok){
             tEl.textContent = t.toFixed(1);
             hEl.textContent = Math.round(h).toString();
             setLast(new Date());
-            pushPoint(t, h, s, raw);
+            pushPoint(t, h, (s===11||s===22)?s:null, line);
             setStatus("połączony", "ok");
           } else {
             setStatus("połączony (błąd odczytu)", "bad");
           }
         }catch(err){
-          // jeśli logi są "normalne", ale to nie JSON, tu by było widać
+          // jeśli nadal coś się wysypie, to zobaczysz CAŁĄ linię w logu powyżej
           log("PARSE ERROR: " + err);
         }
-      });
-
-      setStatus("połączony", "ok");
-      btnConnect.disabled = true;
-      btnDisconnect.disabled = false;
-
-      setLast(null);
-      setSensor(null, null);
-
-      log("Połączono. Czekam na próbki...");
-    }
-
-    function disconnectBLE(){
-      try{ if(device?.gatt?.connected) device.gatt.disconnect(); }catch{}
-    }
-
-    btnConnect.addEventListener("click", () => connectBLE().catch(err=>{
-      setStatus("błąd połączenia", "bad");
-      log("ERROR: " + err);
-    }));
-
-    btnDisconnect.addEventListener("click", () => disconnectBLE());
-    btnExport.addEventListener("click", exportCSV);
-
-    btnClear.addEventListener("click", () => {
-      windowLabels.length = 0;
-      tempData.length = 0;
-      humData.length = 0;
-      allSamples.length = 0;
-
-      tEl.textContent = "--";
-      hEl.textContent = "--";
-      setLast(null);
-      setSensor(null, null);
-      setCount();
-
-      chart.update("none");
-      log("Dane wyczyszczone.");
-    });
-
-    // Test: jeśli to się rysuje, to wykres działa na 100% (problem był wcześniej w rysowaniu ręcznym / skalowaniu)
-    btnTest.addEventListener("click", () => {
-      log("TEST: generuję 20 punktów...");
-      for(let i=0;i<20;i++){
-        const t = 20 + Math.sin(i/3)*2;
-        const h = 40 + Math.cos(i/4)*5;
-        pushPoint(t, h, null, "{\"test\":true}");
       }
-      setStatus("test OK (wykres działa)");
     });
 
-    // init
-    setStatus("rozłączony");
-    setSensor(null, null);
+    setStatus("połączony", "ok");
+    btnConnect.disabled = true;
+    btnDisconnect.disabled = false;
+
     setLast(null);
-    setCount();
-  </script>
+    setSensor(null, null);
+
+    log("Połączono. Czekam na próbki...");
+  }
+
+  function disconnectBLE(){
+    try{ if(device?.gatt?.connected) device.gatt.disconnect(); }catch{}
+  }
+
+  btnConnect.addEventListener("click", () => connectBLE().catch(err=>{
+    setStatus("błąd połączenia", "bad");
+    log("ERROR: " + err);
+  }));
+
+  btnDisconnect.addEventListener("click", () => disconnectBLE());
+  btnExport.addEventListener("click", exportCSV);
+
+  btnClear.addEventListener("click", () => {
+    labels.length = 0; tData.length = 0; hData.length = 0; allSamples.length = 0;
+    tEl.textContent = "--"; hEl.textContent = "--";
+    setLast(null); setSensor(null, null); setCount();
+    chart.update("none");
+    log("Dane wyczyszczone.");
+  });
+
+  // init
+  setStatus("rozłączony");
+  setSensor(null, null);
+  setLast(null);
+  setCount();
+</script>
 </body>
 </html>
