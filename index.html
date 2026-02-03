@@ -1,11 +1,115 @@
 <!doctype html>
 <html lang="pl">
 <head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=dhtt.html">
-  <title>DHTT</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>NanoDHT11 BLE</title>
+  <style>
+    body{font-family:system-ui;margin:24px;max-width:900px}
+    button{padding:10px 14px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer}
+    button.secondary{background:#374151}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .card{border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-top:14px}
+    .big{font-size:30px;font-weight:800}
+    .muted{color:#6b7280}
+    pre{background:#0b1220;color:#d1d5db;padding:12px;border-radius:12px;max-height:240px;overflow:auto}
+  </style>
 </head>
 <body>
-  Przekierowanie...
+  <h1>NanoDHT11 (BLE)</h1>
+  <p class="muted">Kliknij „Połącz BLE”, wybierz urządzenie <b>NanoDHT11</b>.</p>
+
+  <div class="row">
+    <button id="btnConnect">Połącz BLE</button>
+    <button id="btnDisconnect" class="secondary" disabled>Rozłącz</button>
+    <span id="status" class="muted">status: rozłączony</span>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">Temperatura</div>
+        <div class="big"><span id="t">--</span> °C</div>
+      </div>
+      <div>
+        <div class="muted">Wilgotność</div>
+        <div class="big"><span id="h">--</span> %</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="muted">Log</div>
+    <pre id="log"></pre>
+  </div>
+
+<script>
+  const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
+  const CHAR_UUID    = "12345678-1234-1234-1234-1234567890ac";
+
+  const btnConnect = document.getElementById("btnConnect");
+  const btnDisconnect = document.getElementById("btnDisconnect");
+  const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
+  const tEl = document.getElementById("t");
+  const hEl = document.getElementById("h");
+
+  let device, server, characteristic;
+
+  const td = new TextDecoder("utf-8");
+
+  function log(s){
+    logEl.textContent += s + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function setStatus(s){ statusEl.textContent = "status: " + s; }
+
+  async function connectBLE(){
+    if(!navigator.bluetooth){
+      alert("Brak Web Bluetooth. Użyj Chrome/Edge.");
+      return;
+    }
+
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "NanoDHT11" }],
+      optionalServices: [SERVICE_UUID]
+    });
+
+    device.addEventListener("gattserverdisconnected", () => {
+      setStatus("rozłączony");
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
+      log("Rozłączono (device).");
+    });
+
+    server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    characteristic = await service.getCharacteristic(CHAR_UUID);
+
+    await characteristic.startNotifications();
+    characteristic.addEventListener("characteristicvaluechanged", (e) => {
+      const raw = td.decode(e.target.value);
+      log(raw);
+
+      try{
+        const obj = JSON.parse(raw);
+        if(Number.isFinite(obj.t)) tEl.textContent = Number(obj.t).toFixed(1);
+        if(Number.isFinite(obj.h)) hEl.textContent = Number(obj.h).toFixed(1);
+      }catch{}
+    });
+
+    setStatus("połączony");
+    btnConnect.disabled = true;
+    btnDisconnect.disabled = false;
+    log("Połączono. Czekam na notyfikacje...");
+  }
+
+  async function disconnectBLE(){
+    try{ if(device?.gatt?.connected) device.gatt.disconnect(); }catch{}
+  }
+
+  btnConnect.addEventListener("click", connectBLE);
+  btnDisconnect.addEventListener("click", disconnectBLE);
+</script>
 </body>
 </html>
