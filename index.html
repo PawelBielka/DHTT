@@ -3,66 +3,292 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>NanoDHT11 BLE</title>
+  <title>NanoDHT11 • Live</title>
   <style>
-    body{font-family:system-ui;margin:24px;max-width:900px}
-    button{padding:10px 14px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer}
-    button.secondary{background:#374151}
-    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .card{border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-top:14px}
-    .big{font-size:30px;font-weight:800}
-    .muted{color:#6b7280}
-    pre{background:#0b1220;color:#d1d5db;padding:12px;border-radius:12px;max-height:240px;overflow:auto}
+    :root{
+      --bg:#0b1220;
+      --card:#0f1b33;
+      --card2:#0c1730;
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --line:#22345b;
+      --good:#34d399;
+      --bad:#fb7185;
+      --warn:#fbbf24;
+      --btn:#3b82f6;
+      --btn2:#334155;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:24px;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background: radial-gradient(1200px 700px at 10% 10%, #13244a 0%, var(--bg) 60%);
+      color:var(--text);
+    }
+    .wrap{max-width:980px;margin:0 auto}
+    h1{margin:0 0 6px;font-size:22px;letter-spacing:.2px}
+    .sub{margin:0 0 18px;color:var(--muted);font-size:14px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .btn{
+      border:0;border-radius:12px;
+      padding:10px 14px;
+      background:var(--btn);
+      color:white; cursor:pointer;
+      font-weight:600;
+    }
+    .btn.secondary{background:var(--btn2)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .pill{
+      padding:6px 10px;border-radius:999px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.08);
+      color:var(--muted);
+      font-size:12px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:12px;
+      margin-top:14px;
+    }
+    @media (max-width: 860px){ .grid{grid-template-columns:1fr} }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:14px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.28);
+    }
+    .title{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .title b{font-size:13px; color:var(--muted); letter-spacing:.3px}
+    .kpi{
+      display:flex; gap:12px; flex-wrap:wrap;
+    }
+    .k{
+      flex:1;
+      min-width:200px;
+      background:rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:14px;
+    }
+    .k .label{color:var(--muted); font-size:12px; margin-bottom:6px}
+    .k .val{font-size:34px; font-weight:800; letter-spacing:.2px}
+    .k .unit{font-size:14px; color:var(--muted); font-weight:600}
+    .small{font-size:12px;color:var(--muted)}
+    canvas{
+      width:100%;
+      height:320px;
+      border-radius:14px;
+      background:rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    pre{
+      margin:0;
+      white-space:pre-wrap;
+      word-break:break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:12px;
+      color:#cbd5e1;
+      background:rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:12px;
+      height:320px;
+      overflow:auto;
+    }
+    .hint{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.4;
+    }
+    .ok{color:var(--good)}
+    .bad{color:var(--bad)}
+    .warn{color:var(--warn)}
   </style>
 </head>
 <body>
-  <h1>NanoDHT11 (BLE)</h1>
-  <p class="muted">Kliknij „Połącz BLE”, wybierz urządzenie <b>NanoDHT11</b>.</p>
+  <div class="wrap">
+    <h1>NanoDHT11 • Live</h1>
+    <p class="sub">BLE → Web Bluetooth → GitHub Pages. Kliknij „Połącz BLE” i wybierz urządzenie <b>NanoDHT11</b>.</p>
 
-  <div class="row">
-    <button id="btnConnect">Połącz BLE</button>
-    <button id="btnDisconnect" class="secondary" disabled>Rozłącz</button>
-    <span id="status" class="muted">status: rozłączony</span>
-  </div>
-
-  <div class="card">
     <div class="row">
-      <div>
-        <div class="muted">Temperatura</div>
-        <div class="big"><span id="t">--</span> °C</div>
+      <button class="btn" id="btnConnect">Połącz BLE</button>
+      <button class="btn secondary" id="btnDisconnect" disabled>Rozłącz</button>
+      <span class="pill" id="status">status: rozłączony</span>
+      <span class="pill" id="last">ostatni odczyt: --</span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="title">
+          <b>ODCZYTY</b>
+          <span class="pill" id="quality">czujnik: --</span>
+        </div>
+
+        <div class="kpi">
+          <div class="k">
+            <div class="label">Temperatura</div>
+            <div class="val"><span id="t">--</span> <span class="unit">°C</span></div>
+            <div class="small">DHT11 (odświeżanie co 2 s)</div>
+          </div>
+          <div class="k">
+            <div class="label">Wilgotność</div>
+            <div class="val"><span id="h">--</span> <span class="unit">%</span></div>
+            <div class="small">Zasięg typowy: 20–80% RH</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="title"><b>WYKRES (ostatnie 60 punktów)</b><span class="pill">T i H</span></div>
+          <canvas id="chart" width="900" height="320"></canvas>
+        </div>
+
+        <div class="hint">
+          <span class="warn">Uwaga:</span> Web Bluetooth działa w Chrome/Edge. Na iOS zwykle nie.
+        </div>
       </div>
-      <div>
-        <div class="muted">Wilgotność</div>
-        <div class="big"><span id="h">--</span> %</div>
+
+      <div class="card">
+        <div class="title">
+          <b>LOG</b>
+          <button class="btn secondary" id="btnClear" style="padding:8px 10px">Wyczyść</button>
+        </div>
+        <pre id="log"></pre>
+        <div class="hint">
+          Jeśli nie widzisz urządzenia: sprawdź, czy Nano nadaje („advertising”) i czy Bluetooth jest włączony.
+        </div>
       </div>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="muted">Log</div>
-    <pre id="log"></pre>
   </div>
 
 <script>
   const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
   const CHAR_UUID    = "12345678-1234-1234-1234-1234567890ac";
 
-  const btnConnect = document.getElementById("btnConnect");
-  const btnDisconnect = document.getElementById("btnDisconnect");
-  const statusEl = document.getElementById("status");
-  const logEl = document.getElementById("log");
-  const tEl = document.getElementById("t");
-  const hEl = document.getElementById("h");
+  const $ = (id) => document.getElementById(id);
 
-  let device, server, characteristic;
+  const btnConnect = $("btnConnect");
+  const btnDisconnect = $("btnDisconnect");
+  const btnClear = $("btnClear");
 
-  const td = new TextDecoder("utf-8");
+  const statusEl = $("status");
+  const lastEl = $("last");
+  const qualityEl = $("quality");
+
+  const tEl = $("t");
+  const hEl = $("h");
+  const logEl = $("log");
+
+  const canvas = $("chart");
+  const ctx = canvas.getContext("2d");
+
+  let device = null;
+  let characteristic = null;
+
+  const decoder = new TextDecoder("utf-8");
+
+  const points = []; // {t,h,ts}
+  const MAX = 60;
 
   function log(s){
-    logEl.textContent += s + "\n";
+    const ts = new Date().toLocaleTimeString();
+    logEl.textContent += `[${ts}] ${s}\n`;
     logEl.scrollTop = logEl.scrollHeight;
   }
-  function setStatus(s){ statusEl.textContent = "status: " + s; }
+
+  function setStatus(s, kind="muted"){
+    statusEl.textContent = "status: " + s;
+    statusEl.style.color = kind === "ok" ? "var(--good)" : kind==="bad" ? "var(--bad)" : "var(--muted)";
+  }
+
+  function setLast(date){
+    lastEl.textContent = "ostatni odczyt: " + (date ? date.toLocaleTimeString() : "--");
+  }
+
+  function setQuality(ok){
+    if(ok === null){
+      qualityEl.textContent = "czujnik: --";
+      qualityEl.style.color = "var(--muted)";
+      return;
+    }
+    qualityEl.textContent = ok ? "czujnik: OK" : "czujnik: BŁĄD/NaN";
+    qualityEl.style.color = ok ? "var(--good)" : "var(--bad)";
+  }
+
+  function drawChart(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // ramka + padding
+    const pad = 42;
+    const W = canvas.width - pad*2;
+    const H = canvas.height - pad*2;
+
+    // tło osi
+    ctx.strokeStyle = "rgba(255,255,255,.10)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, pad);
+    ctx.lineTo(pad, pad+H);
+    ctx.lineTo(pad+W, pad+H);
+    ctx.stroke();
+
+    if(points.length < 2) return;
+
+    const tVals = points.map(p=>p.t).filter(Number.isFinite);
+    const hVals = points.map(p=>p.h).filter(Number.isFinite);
+
+    const tMin = Math.min(...tVals, 0);
+    const tMax = Math.max(...tVals, 1);
+    const hMin = Math.min(...hVals, 0);
+    const hMax = Math.max(...hVals, 1);
+
+    const x = (i) => pad + (i/(points.length-1))*W;
+    const y = (v, vMin, vMax) => pad + H - ((v - vMin)/((vMax - vMin) || 1))*H;
+
+    // grid delikatny
+    ctx.strokeStyle = "rgba(255,255,255,.06)";
+    ctx.beginPath();
+    for(let i=1;i<=4;i++){
+      const yy = pad + (i/5)*H;
+      ctx.moveTo(pad, yy);
+      ctx.lineTo(pad+W, yy);
+    }
+    ctx.stroke();
+
+    // Temperatura (jasna)
+    ctx.strokeStyle = "rgba(59,130,246,.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((p,i)=>{
+      if(!Number.isFinite(p.t)) return;
+      const xx = x(i), yy = y(p.t, tMin, tMax);
+      if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+    });
+    ctx.stroke();
+
+    // Wilgotność (zielona)
+    ctx.strokeStyle = "rgba(52,211,153,.95)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((p,i)=>{
+      if(!Number.isFinite(p.h)) return;
+      const xx = x(i), yy = y(p.h, hMin, hMax);
+      if(i===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+    });
+    ctx.stroke();
+
+    // legenda
+    ctx.fillStyle = "rgba(229,231,235,.9)";
+    ctx.font = "13px system-ui";
+    ctx.fillText(`T: ${tMin.toFixed(1)}..${tMax.toFixed(1)} °C`, pad, 22);
+    ctx.fillStyle = "rgba(52,211,153,.9)";
+    ctx.fillText(`H: ${hMin.toFixed(1)}..${hMax.toFixed(1)} %`, pad+170, 22);
+  }
 
   async function connectBLE(){
     if(!navigator.bluetooth){
@@ -70,46 +296,84 @@
       return;
     }
 
+    setStatus("łączenie...", "muted");
+    log("Klik: Połącz BLE");
+
     device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "NanoDHT11" }],
       optionalServices: [SERVICE_UUID]
     });
 
     device.addEventListener("gattserverdisconnected", () => {
-      setStatus("rozłączony");
+      setStatus("rozłączony", "bad");
       btnConnect.disabled = false;
       btnDisconnect.disabled = true;
-      log("Rozłączono (device).");
+      characteristic = null;
+      log("Rozłączono (BLE).");
     });
 
-    server = await device.gatt.connect();
+    const server = await device.gatt.connect();
     const service = await server.getPrimaryService(SERVICE_UUID);
     characteristic = await service.getCharacteristic(CHAR_UUID);
 
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", (e) => {
-      const raw = td.decode(e.target.value);
+      const raw = decoder.decode(e.target.value);
       log(raw);
 
       try{
         const obj = JSON.parse(raw);
-        if(Number.isFinite(obj.t)) tEl.textContent = Number(obj.t).toFixed(1);
-        if(Number.isFinite(obj.h)) hEl.textContent = Number(obj.h).toFixed(1);
-      }catch{}
+        const t = Number(obj.t);
+        const h = Number(obj.h);
+
+        const ok = (t !== -1 && h !== -1 && Number.isFinite(t) && Number.isFinite(h));
+        setQuality(ok);
+
+        if(ok){
+          tEl.textContent = t.toFixed(1);
+          hEl.textContent = h.toFixed(1);
+          setLast(new Date());
+
+          points.push({t,h,ts:Date.now()});
+          while(points.length > MAX) points.shift();
+          drawChart();
+        } else {
+          setStatus("połączony (błąd czujnika)", "warn");
+        }
+      }catch{
+        // ignoruj linie nie-JSON
+      }
     });
 
-    setStatus("połączony");
+    setStatus("połączony", "ok");
     btnConnect.disabled = true;
     btnDisconnect.disabled = false;
+
+    setLast(null);
+    setQuality(null);
+
     log("Połączono. Czekam na notyfikacje...");
   }
 
-  async function disconnectBLE(){
-    try{ if(device?.gatt?.connected) device.gatt.disconnect(); }catch{}
+  function disconnectBLE(){
+    try{
+      if(device?.gatt?.connected) device.gatt.disconnect();
+    }catch{}
   }
 
-  btnConnect.addEventListener("click", connectBLE);
-  btnDisconnect.addEventListener("click", disconnectBLE);
+  btnConnect.addEventListener("click", () => connectBLE().catch(err=>{
+    setStatus("błąd połączenia", "bad");
+    log("ERROR: " + err);
+  }));
+
+  btnDisconnect.addEventListener("click", () => disconnectBLE());
+
+  btnClear.addEventListener("click", () => {
+    logEl.textContent = "";
+  });
+
+  // start pusty wykres
+  drawChart();
 </script>
 </body>
 </html>
