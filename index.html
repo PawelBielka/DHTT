@@ -57,18 +57,20 @@
   <header>
     <div>
       <h1>NanoDHT • Monitor</h1>
-      <p class="sub">BLE • T lewa oś • H prawa oś • CSV • parsowanie linij po “\\n”</p>
+      <p class="sub">BLE • Wykres 2-osiowy • parser odporny na pofragmentowany JSON (bez \\n też działa)</p>
     </div>
     <div class="controls">
       <button id="btnConnect">Połącz BLE</button>
       <button id="btnDisconnect" class="secondary" disabled>Rozłącz</button>
       <button id="btnExport" class="secondary" disabled>Eksport CSV</button>
       <button id="btnClear" class="secondary" disabled>Wyczyść dane</button>
+      <button id="btnRead" class="secondary" disabled>Odczytaj 1×</button>
 
       <span id="status" class="pill">rozłączony</span>
       <span id="sensor" class="pill">czujnik: --</span>
       <span id="last" class="pill">ostatni: --</span>
       <span id="count" class="pill">próbki: 0</span>
+      <span id="rx" class="pill">RX: 0B</span>
     </div>
   </header>
 
@@ -93,7 +95,7 @@
         </details>
 
         <div class="note">
-          Jeśli widzisz logi, a wykres był pusty wcześniej: winny był ucięty JSON. Teraz składamy bufor i parsujemy dopiero pełne linie.
+          Jeśli BLE połączone, a brak próbek: kliknij „Odczytaj 1×”. Jeśli to zwróci JSON, to problem był tylko w notyfikacjach.
         </div>
       </section>
 
@@ -102,9 +104,7 @@
         <div class="chartBox">
           <canvas id="chart"></canvas>
         </div>
-        <div class="note">
-          Oś lewa: T [°C]. Oś prawa: H [%].
-        </div>
+        <div class="note">Oś lewa: T [°C]. Oś prawa: H [%].</div>
       </section>
     </div>
   </main>
@@ -112,6 +112,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
+  // UUID muszą pasować do Arduino
   const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
   const CHAR_UUID    = "12345678-1234-1234-1234-1234567890ac";
 
@@ -121,11 +122,13 @@
   const btnDisconnect = $("btnDisconnect");
   const btnExport = $("btnExport");
   const btnClear = $("btnClear");
+  const btnRead = $("btnRead");
 
   const statusEl = $("status");
   const sensorEl = $("sensor");
   const lastEl = $("last");
   const countEl = $("count");
+  const rxEl = $("rx");
   const tEl = $("t");
   const hEl = $("h");
   const logEl = $("log");
@@ -134,7 +137,7 @@
   let characteristic = null;
 
   const decoder = new TextDecoder("utf-8");
-  let rxBuffer = "";   // <<< KLUCZ: bufor na pofragmentowane BLE notyfikacje
+  let rxBuffer = ""; // bufor na fragmenty
 
   const MAX = 60;
   const labels = [];
@@ -174,6 +177,10 @@
     const has = allSamples.length > 0;
     btnExport.disabled = !has;
     btnClear.disabled = !has;
+  }
+
+  function setRx(){
+    rxEl.textContent = "RX: " + rxBuffer.length + "B";
   }
 
   const ctx = $("chart").getContext("2d");
@@ -240,6 +247,64 @@
     URL.revokeObjectURL(url);
   }
 
+  // ====== PARSER ODPORNY: najpierw linie \n, potem obiekty {...} ======
+  function processBuffer(){
+    setRx();
+
+    // 1) jeśli są linie \n — parsuj linie
+    let idx;
+    while ((idx = rxBuffer.indexOf("\n")) >= 0) {
+      const line = rxBuffer.slice(0, idx).trim();
+      rxBuffer = rxBuffer.slice(idx + 1);
+      if (line) handleJsonLine(line);
+    }
+
+    // 2) jeśli brak \n, spróbuj wycinać pełne obiekty {...}
+    //    (dla płaskiego JSON-a z Arduino to jest wystarczające i bardzo stabilne)
+    while (true) {
+      const start = rxBuffer.indexOf("{");
+      if (start < 0) { rxBuffer = ""; break; }
+      const end = rxBuffer.indexOf("}", start);
+      if (end < 0) {
+        // czekamy na resztę
+        if (start > 0) rxBuffer = rxBuffer.slice(start);
+        break;
+      }
+      const candidate = rxBuffer.slice(start, end + 1).trim();
+      // usuń przetworzoną część, nawet jeśli przed { były śmieci
+      rxBuffer = rxBuffer.slice(end + 1);
+      if (candidate) handleJsonLine(candidate);
+    }
+
+    setRx();
+  }
+
+  function handleJsonLine(line){
+    log(line);
+    try{
+      const obj = JSON.parse(line);
+
+      const t = Number(obj.t);
+      const h = Number(obj.h);
+      const s = (obj.s === 11 || obj.s === 22) ? obj.s : Number(obj.s);
+
+      const ok = (t !== -1 && h !== -1 && Number.isFinite(t) && Number.isFinite(h) && h>=0 && h<=100);
+      setSensor((s===11||s===22)?s:null, ok);
+
+      if(ok){
+        tEl.textContent = t.toFixed(1);
+        hEl.textContent = Math.round(h).toString();
+        setLast(new Date());
+        pushPoint(t, h, (s===11||s===22)?s:null, line);
+        setStatus("połączony", "ok");
+      } else {
+        setStatus("połączony (błąd odczytu)", "bad");
+      }
+    }catch(err){
+      log("PARSE ERROR: " + err);
+    }
+  }
+
   async function connectBLE(){
     if(!navigator.bluetooth){
       alert("Web Bluetooth niedostępny. Użyj Chrome/Edge.");
@@ -249,11 +314,11 @@
     setStatus("łączenie...");
     log("Klik: Połącz BLE");
 
-    // <<< KLUCZ: nie acceptAllDevices — filtrujemy po serwisie (i nazwie)
+    // krótsza lista: filtr po serwisie + nazwie
     device = await navigator.bluetooth.requestDevice({
       filters: [{
         services: [SERVICE_UUID],
-        namePrefix: "NanoDHT"
+        namePrefix: "Nano" // pasuje do NanoDHT / NanoDHT11 itd.
       }],
       optionalServices: [SERVICE_UUID]
     });
@@ -262,6 +327,7 @@
       setStatus("rozłączony", "bad");
       btnConnect.disabled = false;
       btnDisconnect.disabled = true;
+      btnRead.disabled = true;
       characteristic = null;
       log("Rozłączono (BLE).");
     });
@@ -270,56 +336,38 @@
     const service = await server.getPrimaryService(SERVICE_UUID);
     characteristic = await service.getCharacteristic(CHAR_UUID);
 
-    rxBuffer = ""; // reset bufora
+    rxBuffer = "";
+    setRx();
 
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", (e) => {
       const chunk = decoder.decode(e.target.value);
-      // loguj też chunk, ale wolisz log całych linii? Tu logujemy linie po złożeniu.
       rxBuffer += chunk;
-
-      // Parsujemy tylko pełne linie zakończone '\n'
-      let idx;
-      while ((idx = rxBuffer.indexOf("\n")) >= 0) {
-        const line = rxBuffer.slice(0, idx).trim();
-        rxBuffer = rxBuffer.slice(idx + 1);
-
-        if(!line) continue;
-        log(line);
-
-        try{
-          const obj = JSON.parse(line);
-          const t = Number(obj.t);
-          const h = Number(obj.h);
-          const s = (obj.s === 11 || obj.s === 22) ? obj.s : Number(obj.s);
-
-          const ok = (t !== -1 && h !== -1 && Number.isFinite(t) && Number.isFinite(h) && h>=0 && h<=100);
-          setSensor((s===11||s===22)?s:null, ok);
-
-          if(ok){
-            tEl.textContent = t.toFixed(1);
-            hEl.textContent = Math.round(h).toString();
-            setLast(new Date());
-            pushPoint(t, h, (s===11||s===22)?s:null, line);
-            setStatus("połączony", "ok");
-          } else {
-            setStatus("połączony (błąd odczytu)", "bad");
-          }
-        }catch(err){
-          // jeśli nadal coś się wysypie, to zobaczysz CAŁĄ linię w logu powyżej
-          log("PARSE ERROR: " + err);
-        }
-      }
+      processBuffer();
     });
 
     setStatus("połączony", "ok");
     btnConnect.disabled = true;
     btnDisconnect.disabled = false;
+    btnRead.disabled = false;
 
     setLast(null);
     setSensor(null, null);
 
     log("Połączono. Czekam na próbki...");
+  }
+
+  async function readOnce(){
+    if(!characteristic) return;
+    try{
+      const v = await characteristic.readValue();
+      const s = decoder.decode(v);
+      rxBuffer += s;
+      processBuffer();
+      log("READ 1× OK");
+    }catch(err){
+      log("READ ERROR: " + err);
+    }
   }
 
   function disconnectBLE(){
@@ -333,6 +381,7 @@
 
   btnDisconnect.addEventListener("click", () => disconnectBLE());
   btnExport.addEventListener("click", exportCSV);
+  btnRead.addEventListener("click", readOnce);
 
   btnClear.addEventListener("click", () => {
     labels.length = 0; tData.length = 0; hData.length = 0; allSamples.length = 0;
@@ -347,6 +396,7 @@
   setSensor(null, null);
   setLast(null);
   setCount();
+  setRx();
 </script>
 </body>
 </html>
