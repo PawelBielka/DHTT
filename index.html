@@ -6,7 +6,7 @@
   <title>NanoDHT • Monitor</title>
   <style>
     :root{
-      --bg:#ffffff; --text:#0f172a; --muted:#475569;
+      --bg:#fff; --text:#0f172a; --muted:#475569;
       --line:#e5e7eb; --line2:#cbd5e1;
       --ok:#16a34a; --bad:#dc2626; --btn:#0f172a;
     }
@@ -17,27 +17,24 @@
     h1{margin:0;font-size:18px}
     .sub{margin:4px 0 0;color:var(--muted);font-size:13px}
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-
     button{border:1px solid var(--btn);background:var(--btn);color:#fff;padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
     button.secondary{background:#fff;color:var(--btn);border:1px solid var(--line2)}
     button:disabled{opacity:.5;cursor:not-allowed}
-
     .pill{border:1px solid var(--line2);background:#fff;color:var(--muted);padding:7px 10px;border-radius:999px;font-size:12px;line-height:1}
     .pill.ok{color:var(--ok);border-color:rgba(22,163,74,.35)}
     .pill.bad{color:var(--bad);border-color:rgba(220,38,38,.35)}
-
     main{padding-top:14px}
     .grid{display:grid;grid-template-columns:1fr 1.7fr;gap:14px;align-items:start}
     @media (max-width:980px){.grid{grid-template-columns:1fr}}
     .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
     .card h2{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:800;letter-spacing:.35px}
-
     .kpis{display:grid;gap:10px}
     .kpi{border:1px solid var(--line);border-radius:12px;padding:12px}
     .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
     .kpi .value{font-size:30px;font-weight:900}
     .kpi .unit{font-size:13px;color:var(--muted);font-weight:700}
-
+    .chartBox{border:1px solid var(--line);border-radius:12px;padding:10px;height:380px;position:relative;background:#fff}
+    canvas{width:100% !important;height:100% !important;}
     details{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
     summary{cursor:pointer;color:var(--muted);font-size:12px}
     pre{
@@ -46,9 +43,6 @@
       white-space:pre-wrap;word-break:break-word;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
-
-    .chartBox{border:1px solid var(--line);border-radius:12px;padding:10px;height:380px;position:relative;background:#fff}
-    canvas{width:100% !important;height:100% !important;}
     .note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35}
   </style>
 </head>
@@ -57,20 +51,20 @@
   <header>
     <div>
       <h1>NanoDHT • Monitor</h1>
-      <p class="sub">BLE • Wykres 2-osiowy • parser odporny na pofragmentowany JSON (bez \\n też działa)</p>
+      <p class="sub">BLE • format: T,H,S,SEQ (CSV) • T lewa oś • H prawa oś • eksport CSV</p>
     </div>
     <div class="controls">
       <button id="btnConnect">Połącz BLE</button>
       <button id="btnDisconnect" class="secondary" disabled>Rozłącz</button>
+      <button id="btnSample" class="secondary" disabled>Pobierz próbkę</button>
       <button id="btnExport" class="secondary" disabled>Eksport CSV</button>
       <button id="btnClear" class="secondary" disabled>Wyczyść dane</button>
-      <button id="btnRead" class="secondary" disabled>Odczytaj 1×</button>
 
       <span id="status" class="pill">rozłączony</span>
+      <span id="dev" class="pill">device: --</span>
       <span id="sensor" class="pill">czujnik: --</span>
       <span id="last" class="pill">ostatni: --</span>
       <span id="count" class="pill">próbki: 0</span>
-      <span id="rx" class="pill">RX: 0B</span>
     </div>
   </header>
 
@@ -95,7 +89,7 @@
         </details>
 
         <div class="note">
-          Jeśli BLE połączone, a brak próbek: kliknij „Odczytaj 1×”. Jeśli to zwróci JSON, to problem był tylko w notyfikacjach.
+          Jeżeli po połączeniu nic nie przychodzi: kliknij „Pobierz próbkę” (wysyła komendę 'S' do Arduino).
         </div>
       </section>
 
@@ -112,197 +106,130 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-  // UUID muszą pasować do Arduino
   const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
-  const CHAR_UUID    = "12345678-1234-1234-1234-1234567890ac";
+  const DATA_UUID    = "12345678-1234-1234-1234-1234567890ac";
+  const CMD_UUID     = "12345678-1234-1234-1234-1234567890ad";
 
   const $ = (id) => document.getElementById(id);
 
   const btnConnect = $("btnConnect");
   const btnDisconnect = $("btnDisconnect");
+  const btnSample = $("btnSample");
   const btnExport = $("btnExport");
   const btnClear = $("btnClear");
-  const btnRead = $("btnRead");
 
   const statusEl = $("status");
+  const devEl = $("dev");
   const sensorEl = $("sensor");
   const lastEl = $("last");
   const countEl = $("count");
-  const rxEl = $("rx");
   const tEl = $("t");
   const hEl = $("h");
   const logEl = $("log");
 
-  let device = null;
-  let characteristic = null;
-
+  let device=null, server=null, service=null, dataChar=null, cmdChar=null;
   const decoder = new TextDecoder("utf-8");
-  let rxBuffer = ""; // bufor na fragmenty
 
   const MAX = 60;
-  const labels = [];
-  const tData = [];
-  const hData = [];
-  const allSamples = []; // {iso, ts, s, t, h, raw}
+  const labels=[], tData=[], hData=[];
+  const allSamples=[]; // {iso, ts, sensor, t, h, seq, raw}
 
   function log(s){
     const ts = new Date().toLocaleTimeString();
     logEl.textContent += `[${ts}] ${s}\n`;
     logEl.scrollTop = logEl.scrollHeight;
   }
-
   function setStatus(text, kind=""){
-    statusEl.textContent = text;
+    statusEl.textContent=text;
     statusEl.classList.remove("ok","bad");
     if(kind) statusEl.classList.add(kind);
   }
-
   function setSensor(sensorId, ok){
-    let label = "czujnik: --";
-    if(sensorId === 11) label = "czujnik: DHT11";
-    else if(sensorId === 22) label = "czujnik: DHT22";
-    sensorEl.textContent = label;
-
+    let label="czujnik: --";
+    if(sensorId===11) label="czujnik: DHT11";
+    else if(sensorId===22) label="czujnik: DHT22";
+    sensorEl.textContent=label;
     sensorEl.classList.remove("ok","bad");
-    if(ok === true) sensorEl.classList.add("ok");
-    if(ok === false) sensorEl.classList.add("bad");
+    if(ok===true) sensorEl.classList.add("ok");
+    if(ok===false) sensorEl.classList.add("bad");
   }
-
-  function setLast(date){
-    lastEl.textContent = "ostatni: " + (date ? date.toLocaleTimeString() : "--");
-  }
-
+  function setLast(d){ lastEl.textContent="ostatni: "+(d?d.toLocaleTimeString():"--"); }
   function setCount(){
-    countEl.textContent = "próbki: " + allSamples.length;
-    const has = allSamples.length > 0;
-    btnExport.disabled = !has;
-    btnClear.disabled = !has;
-  }
-
-  function setRx(){
-    rxEl.textContent = "RX: " + rxBuffer.length + "B";
+    countEl.textContent="próbki: "+allSamples.length;
+    const has=allSamples.length>0;
+    btnExport.disabled=!has;
+    btnClear.disabled=!has;
   }
 
   const ctx = $("chart").getContext("2d");
-  const chart = new Chart(ctx, {
-    type: "line",
-    data: {
+  const chart = new Chart(ctx,{
+    type:"line",
+    data:{
       labels,
-      datasets: [
-        { label:"T [°C]", data:tData, yAxisID:"yT", borderColor:"#0f172a", backgroundColor:"transparent", tension:0.2, pointRadius:2 },
-        { label:"H [%]", data:hData, yAxisID:"yH", borderColor:"#64748b", backgroundColor:"transparent", tension:0.2, pointRadius:2 }
+      datasets:[
+        {label:"T [°C]", data:tData, yAxisID:"yT", borderColor:"#0f172a", backgroundColor:"transparent", tension:0.2, pointRadius:2},
+        {label:"H [%]", data:hData, yAxisID:"yH", borderColor:"#64748b", backgroundColor:"transparent", tension:0.2, pointRadius:2}
       ]
     },
-    options: {
-      responsive:true,
-      maintainAspectRatio:false,
-      animation:false,
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
       interaction:{mode:"index", intersect:false},
-      plugins:{ legend:{display:false} },
+      plugins:{legend:{display:false}},
       scales:{
-        x:{ grid:{color:"#f1f5f9"}, ticks:{maxTicksLimit:8, color:"#475569"} },
-        yT:{ position:"left", grid:{color:"#f1f5f9"}, ticks:{color:"#475569"}, title:{display:true,text:"T [°C]",color:"#475569"} },
-        yH:{ position:"right", grid:{drawOnChartArea:false}, ticks:{color:"#475569"}, title:{display:true,text:"H [%]",color:"#475569"}, min:0, max:100 }
+        x:{grid:{color:"#f1f5f9"}, ticks:{maxTicksLimit:8, color:"#475569"}},
+        yT:{position:"left", grid:{color:"#f1f5f9"}, ticks:{color:"#475569"}, title:{display:true,text:"T [°C]",color:"#475569"}},
+        yH:{position:"right", grid:{drawOnChartArea:false}, ticks:{color:"#475569"}, title:{display:true,text:"H [%]",color:"#475569"}, min:0, max:100}
       }
     }
   });
 
-  function pushPoint(t, h, s, raw){
-    const now = new Date();
+  function pushPoint(t,h,sensor,seq,raw){
+    const now=new Date();
     labels.push(now.toLocaleTimeString());
     tData.push(t);
     hData.push(h);
+    while(labels.length>MAX){ labels.shift(); tData.shift(); hData.shift(); }
 
-    while(labels.length > MAX){ labels.shift(); tData.shift(); hData.shift(); }
-
-    allSamples.push({ iso: now.toISOString(), ts: now.getTime(), s, t, h, raw });
+    allSamples.push({
+      iso: now.toISOString(),
+      ts: now.getTime(),
+      sensor, t, h, seq, raw
+    });
 
     setCount();
     chart.update("none");
   }
 
-  function exportCSV(){
-    if(allSamples.length === 0) return;
-
-    const lines = [];
-    lines.push("timestamp_iso,epoch_ms,sensor,temperature_c,humidity_pct,raw");
-
-    for(const p of allSamples){
-      const sName = (p.s === 22) ? "DHT22" : (p.s === 11) ? "DHT11" : "";
-      const t = Number.isFinite(p.t) ? p.t.toFixed(1) : "";
-      const h = Number.isFinite(p.h) ? Math.round(p.h).toString() : "";
-      const raw = (p.raw ?? "").replaceAll('"','""');
-      lines.push(`${p.iso},${p.ts},${sName},${t},${h},"${raw}"`);
-    }
-
-    const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const stamp = new Date().toISOString().replaceAll(":","-").slice(0,19);
-    a.href = url;
-    a.download = `nano_dht_${stamp}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  // ====== PARSER ODPORNY: najpierw linie \n, potem obiekty {...} ======
-  function processBuffer(){
-    setRx();
-
-    // 1) jeśli są linie \n — parsuj linie
-    let idx;
-    while ((idx = rxBuffer.indexOf("\n")) >= 0) {
-      const line = rxBuffer.slice(0, idx).trim();
-      rxBuffer = rxBuffer.slice(idx + 1);
-      if (line) handleJsonLine(line);
-    }
-
-    // 2) jeśli brak \n, spróbuj wycinać pełne obiekty {...}
-    //    (dla płaskiego JSON-a z Arduino to jest wystarczające i bardzo stabilne)
-    while (true) {
-      const start = rxBuffer.indexOf("{");
-      if (start < 0) { rxBuffer = ""; break; }
-      const end = rxBuffer.indexOf("}", start);
-      if (end < 0) {
-        // czekamy na resztę
-        if (start > 0) rxBuffer = rxBuffer.slice(start);
-        break;
-      }
-      const candidate = rxBuffer.slice(start, end + 1).trim();
-      // usuń przetworzoną część, nawet jeśli przed { były śmieci
-      rxBuffer = rxBuffer.slice(end + 1);
-      if (candidate) handleJsonLine(candidate);
-    }
-
-    setRx();
-  }
-
-  function handleJsonLine(line){
+  function handleLine(line){
     log(line);
-    try{
-      const obj = JSON.parse(line);
 
-      const t = Number(obj.t);
-      const h = Number(obj.h);
-      const s = (obj.s === 11 || obj.s === 22) ? obj.s : Number(obj.s);
+    // format: T,H,S,SEQ
+    const parts = line.trim().split(",");
+    if(parts.length < 4) return;
 
-      const ok = (t !== -1 && h !== -1 && Number.isFinite(t) && Number.isFinite(h) && h>=0 && h<=100);
-      setSensor((s===11||s===22)?s:null, ok);
+    const t = Number(parts[0]);
+    const h = Number(parts[1]);
+    const s = Number(parts[2]);
+    const seq = Number(parts[3]);
 
-      if(ok){
-        tEl.textContent = t.toFixed(1);
-        hEl.textContent = Math.round(h).toString();
-        setLast(new Date());
-        pushPoint(t, h, (s===11||s===22)?s:null, line);
-        setStatus("połączony", "ok");
-      } else {
-        setStatus("połączony (błąd odczytu)", "bad");
-      }
-    }catch(err){
-      log("PARSE ERROR: " + err);
+    const ok = Number.isFinite(t) && Number.isFinite(h) && h>=0 && h<=100 && (s===11 || s===22 || s===0);
+    setSensor((s===11||s===22)?s:null, ok);
+
+    if(ok && t !== -1 && h !== -1){
+      tEl.textContent = t.toFixed(1);
+      hEl.textContent = Math.round(h).toString();
+      setLast(new Date());
+      pushPoint(t,h,(s===11||s===22)?s:null,seq,line);
+      setStatus("połączony","ok");
+    } else {
+      setStatus("połączony (błąd odczytu)","bad");
     }
+  }
+
+  async function sendCmd(ch){
+    if(!cmdChar) return;
+    const data = new Uint8Array([ch.charCodeAt(0)]);
+    await cmdChar.writeValue(data);
   }
 
   async function connectBLE(){
@@ -314,89 +241,97 @@
     setStatus("łączenie...");
     log("Klik: Połącz BLE");
 
-    // krótsza lista: filtr po serwisie + nazwie
     device = await navigator.bluetooth.requestDevice({
-      filters: [{
-        services: [SERVICE_UUID],
-        namePrefix: "Nano" // pasuje do NanoDHT / NanoDHT11 itd.
-      }],
+      filters: [{ namePrefix:"NanoDHT", services:[SERVICE_UUID] }],
       optionalServices: [SERVICE_UUID]
     });
 
-    device.addEventListener("gattserverdisconnected", () => {
-      setStatus("rozłączony", "bad");
-      btnConnect.disabled = false;
-      btnDisconnect.disabled = true;
-      btnRead.disabled = true;
-      characteristic = null;
+    devEl.textContent = "device: " + (device.name || "--");
+
+    device.addEventListener("gattserverdisconnected", ()=>{
+      setStatus("rozłączony","bad");
+      btnConnect.disabled=false;
+      btnDisconnect.disabled=true;
+      btnSample.disabled=true;
       log("Rozłączono (BLE).");
     });
 
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    characteristic = await service.getCharacteristic(CHAR_UUID);
+    server = await device.gatt.connect();
+    service = await server.getPrimaryService(SERVICE_UUID);
 
-    rxBuffer = "";
-    setRx();
+    dataChar = await service.getCharacteristic(DATA_UUID);
+    cmdChar  = await service.getCharacteristic(CMD_UUID);
 
-    await characteristic.startNotifications();
-    characteristic.addEventListener("characteristicvaluechanged", (e) => {
-      const chunk = decoder.decode(e.target.value);
-      rxBuffer += chunk;
-      processBuffer();
+    await dataChar.startNotifications();
+
+    dataChar.addEventListener("characteristicvaluechanged", (e)=>{
+      const raw = decoder.decode(e.target.value);
+      handleLine(raw);
     });
 
-    setStatus("połączony", "ok");
-    btnConnect.disabled = true;
-    btnDisconnect.disabled = false;
-    btnRead.disabled = false;
+    // Fallback: co 2.5s zrób readValue (gdyby notify nie przyszło)
+    setInterval(async ()=>{
+      if(!dataChar) return;
+      try{
+        const v = await dataChar.readValue();
+        const raw = decoder.decode(v);
+        if(raw && raw.trim().length) handleLine(raw);
+      }catch{}
+    }, 2500);
+
+    setStatus("połączony","ok");
+    btnConnect.disabled=true;
+    btnDisconnect.disabled=false;
+    btnSample.disabled=false;
 
     setLast(null);
-    setSensor(null, null);
+    setSensor(null,null);
 
-    log("Połączono. Czekam na próbki...");
-  }
-
-  async function readOnce(){
-    if(!characteristic) return;
-    try{
-      const v = await characteristic.readValue();
-      const s = decoder.decode(v);
-      rxBuffer += s;
-      processBuffer();
-      log("READ 1× OK");
-    }catch(err){
-      log("READ ERROR: " + err);
-    }
+    log("Połączono. Wysyłam komendę S (próbka)...");
+    await sendCmd("S");
   }
 
   function disconnectBLE(){
     try{ if(device?.gatt?.connected) device.gatt.disconnect(); }catch{}
   }
 
-  btnConnect.addEventListener("click", () => connectBLE().catch(err=>{
-    setStatus("błąd połączenia", "bad");
-    log("ERROR: " + err);
+  function exportCSV(){
+    if(allSamples.length===0) return;
+    const lines=[];
+    lines.push("timestamp_iso,epoch_ms,sensor,temperature_c,humidity_pct,seq,raw");
+    for(const p of allSamples){
+      const sName = p.sensor===22 ? "DHT22" : p.sensor===11 ? "DHT11" : "";
+      const raw = (p.raw ?? "").replaceAll('"','""');
+      lines.push(`${p.iso},${p.ts},${sName},${p.t.toFixed(1)},${Math.round(p.h)},${p.seq},"${raw}"`);
+    }
+    const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    const stamp=new Date().toISOString().replaceAll(":","-").slice(0,19);
+    a.href=url; a.download=`nano_dht_${stamp}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  btnConnect.addEventListener("click", ()=>connectBLE().catch(err=>{
+    setStatus("błąd połączenia","bad");
+    log("ERROR: "+err);
   }));
-
-  btnDisconnect.addEventListener("click", () => disconnectBLE());
+  btnDisconnect.addEventListener("click", ()=>disconnectBLE());
+  btnSample.addEventListener("click", ()=>sendCmd("S").then(()=>log("CMD: S")).catch(e=>log("CMD ERROR: "+e)));
   btnExport.addEventListener("click", exportCSV);
-  btnRead.addEventListener("click", readOnce);
-
-  btnClear.addEventListener("click", () => {
-    labels.length = 0; tData.length = 0; hData.length = 0; allSamples.length = 0;
-    tEl.textContent = "--"; hEl.textContent = "--";
-    setLast(null); setSensor(null, null); setCount();
+  btnClear.addEventListener("click", ()=>{
+    labels.length=0; tData.length=0; hData.length=0; allSamples.length=0;
+    tEl.textContent="--"; hEl.textContent="--";
+    setLast(null); setSensor(null,null); setCount();
     chart.update("none");
     log("Dane wyczyszczone.");
   });
 
-  // init
   setStatus("rozłączony");
-  setSensor(null, null);
+  setSensor(null,null);
   setLast(null);
   setCount();
-  setRx();
 </script>
 </body>
 </html>
